@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "eric-oss-pf-apex-configmap.name" . }}
+  labels:
+    app: {{ template "eric-oss-pf-apex-configmap.name" . }}
+  {{- include "eric-oss-pf-apex.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-apex.eric-product-info" .| nindent 4 }}
+data:
+{{ tpl (.Files.Glob "resources/config/*").AsConfig . | indent 2 }}

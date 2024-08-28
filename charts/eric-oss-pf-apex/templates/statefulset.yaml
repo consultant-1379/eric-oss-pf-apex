@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "eric-oss-pf-apex.name" . }}
+  labels:
+    app: {{ template "eric-oss-pf-apex.name" . }}
+  {{- include "eric-oss-pf-apex.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-apex.eric-product-info" .| nindent 4 }}
+
+spec:
+  serviceName: {{ .Chart.Name }}
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      annotations:
+      {{- include "eric-oss-pf-apex.eric-product-info" .| nindent 8 }}
+      labels:
+        app: {{ template "eric-oss-pf-apex.name" . }}
+      {{- include "eric-oss-pf-apex.kubernetes-io-info" .| nindent 8 }}
+    spec:
+      serviceAccountName: {{ template "eric-oss-pf-apex.name" . }}-sa
+      {{- if  .Values.imageCredentials.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imageCredentials.pullSecret | quote }}
+      {{- else if .Values.global.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.pullSecret | quote }}
+      {{- end }}
+      
+      {{- if (index .Values.podPriority "eric-oss-pf-apex" "priorityClassName") }}
+      priorityClassName: {{ index .Values.podPriority "eric-oss-pf-apex" "priorityClassName" | quote }}
+      {{- end }}
+      
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ template "eric-oss-pf-apex.mainImagePath" . }}"
+          imagePullPolicy: {{ include "eric-oss-pf-apex.imagePullPolicy" $ | quote }}
+          command:
+          - /opt/app/policy/apex-pdp/bin/apexOnapPf.sh
+          - -c
+          - /home/apexuser/config/OnapPfConfig.json
+          ports:
+          - containerPort: {{ .Values.service.externalPort }}
+          resources:
+            requests:
+              memory: {{ .Values.resources.apex.requests.memory | quote}}
+              cpu: {{ .Values.resources.apex.requests.cpu}}
+              
+              {{- if index $.Values "resources" "apex" "requests" "ephemeral-storage" }}
+              ephemeral-storage: {{ index $.Values "resources" "apex" "requests" "ephemeral-storage" | quote }}
+              {{- end }} 
+            limits:
+              memory: {{ .Values.resources.apex.limits.memory | quote}}
+              cpu: {{ .Values.resources.apex.limits.cpu }}
+              
+              {{- if index $.Values "resources" "apex" "limits" "ephemeral-storage" }}
+              ephemeral-storage: {{ index $.Values "resources" "apex" "limits" "ephemeral-storage" | quote }}
+              {{- end }}
+              
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.service.externalPort }}
+            initialDelaySeconds: {{ .Values.probe.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probe.liveness.periodSeconds }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.service.externalPort }}
+            initialDelaySeconds: {{ .Values.probe.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probe.readiness.periodSeconds }}
+          env:
+          - name: REPLICAS
+            value: "{{ .Values.replicas }}"
+          volumeMounts:
+          - mountPath: /etc/localtime
+            name: localtime
+            readOnly: true
+          - mountPath: /var/log/onap
+            name: policy-logs
+          - mountPath: /home/apexuser/config
+            name: apexconfig
+          securityContext:
+            allowPrivilegeEscalation: true
+            runAsNonRoot: true
+            runAsUser: 1000
+      {{- if .Values.nodeSelector}}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+      {{- else if .Values.global.nodeSelector}}
+      nodeSelector:
+{{ toYaml .Values.global.nodeSelector | indent 8 }}
+      {{- end}}
+      volumes:
+        - name: localtime
+          hostPath:
+            path: /etc/localtime
+        - name: policy-logs
+          emptyDir: {}
+        - name: apexconfig
+          configMap:
+            name: {{ .Chart.Name }}
+            defaultMode: 0755

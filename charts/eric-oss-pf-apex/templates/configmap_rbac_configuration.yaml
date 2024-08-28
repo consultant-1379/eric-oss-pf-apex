@@ -1,0 +1,100 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{ template "eric-oss-pf-apex.name" . }}-rbac-configuration-configmap
+  labels:
+    app: {{ template "eric-oss-pf-apex.name" . }}
+  {{- include "eric-oss-pf-apex.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-apex.eric-product-info" .| nindent 4 }}
+data:
+  rbac-configuration.json: |
+    {
+        "roles": [{
+                "name": "PF_APEX_Admin",
+                "attributes": {
+                    "type": ["internal"]
+                }
+            }, {
+                "name": "PF_APEX_User",
+              "attributes": {
+                    "type": ["internal"]
+                }
+            }
+        ],
+        "authorization": {
+            "resources": [{
+                    "name": "APEX Endpoints",
+                    "type": "urn:eo:pf:resources:apex",
+                    "ownerManagedAccess": false,
+                    "attributes": {},
+                    "uris": [
+                        "/policy/apex-pdp/v1",
+                        "/policy/apex-pdp/v1/**"
+                    ],
+                    "scopes": [{
+                            "name": "PATCH"
+                        }, {
+                            "name": "DELETE"
+                        }, {
+                            "name": "GET"
+                        }, {
+                            "name": "POST"
+                        }, {
+                            "name": "PUT"
+                        }
+                    ]
+                }
+            ],
+            "policies": [{
+                    "name": "Is PF APEX Admin",
+                    "type": "role",
+                    "logic": "POSITIVE",
+                    "decisionStrategy": "UNANIMOUS",
+                    "config": {
+                        "roles": "[{\"id\":\"PF_APEX_Admin\",\"required\":false}]"
+                    }
+                }, {
+                    "name": "Is PF APEX User",
+                    "type": "role",
+                    "logic": "POSITIVE",
+                    "decisionStrategy": "UNANIMOUS",
+                    "config": {
+                        "roles": "[{\"id\":\"PF_APEX_User\",\"required\":false}]"
+                    }
+                }, {
+                    "name": "Admin PF APEX",
+                    "type": "scope",
+                    "logic": "POSITIVE",
+                    "decisionStrategy": "AFFIRMATIVE",
+                    "config": {
+                        "resources": "[\"APEX Endpoints\"]",
+                        "scopes": "[\"PUT\",\"DELETE\",\"POST\",\"PATCH\"]",
+                        "applyPolicies": "[\"Is PF APEX Admin\"]"
+                    }
+                }, {
+                    "name": "View PF APEX",
+                    "type": "scope",
+                    "logic": "POSITIVE",
+                    "decisionStrategy": "AFFIRMATIVE",
+                    "config": {
+                        "resources": "[\"APEX Endpoints\"]",
+                        "scopes": "[\"GET\"]",
+                        "applyPolicies": "[\"Is PF APEX Admin\",\"Is PF APEX User\"]"
+                    }
+                }
+            ],
+            "scopes": [{
+                    "name": "GET"
+                }, {
+                    "name": "POST"
+                }, {
+                    "name": "DELETE"
+                }, {
+                    "name": "PUT"
+                }, {
+                    "name": "PATCH"
+                }
+            ]
+        }
+    }

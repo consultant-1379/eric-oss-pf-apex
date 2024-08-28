@@ -1,0 +1,98 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "eric-oss-pf-apex.name" . }}-create-rbac-configuration-hook
+  labels:
+    app: {{ template "eric-oss-pf-apex.name" . }}
+  {{- include "eric-oss-pf-apex.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-apex.eric-product-info" .| nindent 4 }}
+    "helm.sh/hook": post-install, post-upgrade, post-rollback
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: 8
+  template:
+    metadata:
+      labels:
+        app: {{ template "eric-oss-pf-apex.name" . }}
+    spec:
+      serviceAccountName: {{ template "eric-oss-pf-apex.name" . }}-sa
+      {{- if  .Values.imageCredentials.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imageCredentials.pullSecret | quote }}
+      {{- else if .Values.global.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.pullSecret | quote }}
+      {{- end }}
+      
+      {{- if (index .Values.podPriority "eric-oss-pf-apex" "priorityClassName") }}
+      priorityClassName: {{ index .Values.podPriority "eric-oss-pf-apex" "priorityClassName" | quote }}
+      {{- end }}
+      
+      restartPolicy: Never
+      containers:
+        - name: keycloak-client
+          image: {{ template "eric-oss-pf-apex.keycloakImagePath" . }}
+          resources:
+            requests:
+              memory: {{ .Values.resources.keycloak.requests.memory | quote}}
+              cpu: {{ .Values.resources.keycloak.requests.cpu}}
+              {{- if index $.Values "resources" "keycloak" "requests" "ephemeral-storage" }}
+              ephemeral-storage: {{ index $.Values "resources" "keycloak" "requests" "ephemeral-storage" | quote }}
+              {{- end }}
+              
+            limits:
+              memory: {{ .Values.resources.keycloak.limits.memory | quote}}
+              cpu: {{ .Values.resources.keycloak.limits.cpu }}
+              {{- if index $.Values "resources" "keycloak" "limits" "ephemeral-storage" }}
+              ephemeral-storage: {{ index $.Values "resources" "keycloak" "limits" "ephemeral-storage" | quote }}
+              {{- end }}
+              
+          env:
+          - name: IAM_ADMIN_USER
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.global.iam.adminSecret | quote }}
+                key: {{ .Values.global.iam.userKey | quote }}
+          - name: IAM_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.global.iam.adminSecret | quote }}
+                key: {{ .Values.global.iam.passwordKey | quote }}
+          args:
+          - "create"
+          - "authz"
+          - "--keycloak_hostname={{ .Values.global.hosts.iam }}"
+          - "--keycloak_user=$(IAM_ADMIN_USER)"
+          - "--keycloak_password=$(IAM_ADMIN_PASSWORD)"
+          - "--client_name={{ .Values.global.iam.clientId }}"
+          - "--provider={{ .Chart.Name }}"
+          - "--config=/config/rbac-configuration.json"
+          volumeMounts:
+          - name: create-rbac-configuration-volume
+            mountPath: /config
+          - name: create-cacert-volume
+            mountPath: /mnt/certs
+          securityContext:
+            allowPrivilegeEscalation: true
+            runAsNonRoot: false
+            runAsUser: 0
+      {{- if .Values.nodeSelector}}
+      nodeSelector:
+{{ toYaml .Values.nodeSelector | indent 8 }}
+      {{- else if .Values.global.nodeSelector}}
+      nodeSelector:
+{{ toYaml .Values.global.nodeSelector | indent 8 }}
+      {{- end}}
+      volumes:
+      - name: create-rbac-configuration-volume
+        configMap:
+          name: {{ .Chart.Name }}-rbac-configuration-configmap
+          defaultMode: 0777
+      - name: create-cacert-volume
+        secret:
+          secretName: {{ .Values.global.iam.cacert.secretName }}
+          items:
+            - key: {{ .Values.global.iam.cacert.key }}
+              path: {{ .Values.global.iam.cacert.filePath }}

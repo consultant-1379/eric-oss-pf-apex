@@ -1,0 +1,114 @@
+global:
+  registry:
+    url: armdocker.rnd.ericsson.se
+    imagePullPolicy: IfNotPresent
+  hosts:
+    iam: "iam.ericsson.com"
+  iam:
+    clientId: "eo"
+    adminSecret: eric-sec-access-mgmt-creds
+    userKey: kcadminid
+    passwordKey: kcpasswd
+    cacert:
+      secretName: iam-cacert-secret
+      key: tls.crt
+      filePath: iam/ca.crt
+
+imageCredentials:
+  apexImage:
+    repoPath: # see default in eric-product-info.yaml
+    registry:
+      imagePullPolicy: IfNotPresent
+  keycloakImage:
+    repoPath: # see default in eric-product-info.yaml
+    registry:
+      imagePullPolicy: IfNotPresent
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 25%
+    maxSurge: 25%
+
+debug: false
+
+replicas: 1
+ 
+port:
+  http: 6969
+  https: 443
+  jvmDebug: 9001
+  jvmJmxRemote: 9002 
+
+service:
+  port:
+    http: 6969
+    https: 443
+    type: ClusterIP
+  type: ClusterIP
+  name: policy-apex-pdp
+  portName: policy-apex-pdp
+  externalPort: 6969
+  internalPort: 6969
+  nodePort: 37 
+
+jvmOptions:
+- "-XX:+UnlockExperimentalVMOptions"
+- "-XX:+UseCGroupMemoryLimitForHeap"
+- "-XX:+UseG1GC"
+- "-Xms100m"
+- "-Xmx2048m"
+jvmDebugOptions:
+- "-agentlib:jdwp=transport=dt_socket,server=y,address=9001,suspend=n"
+- "-Dcom.sun.management.jmxremote"
+- "-Dcom.sun.management.jmxremote.ssl=false"
+- "-Dcom.sun.management.jmxremote.authenticate=false"
+- "-Dcom.sun.management.jmxremote.local.only=false"
+- "-Djava.rmi.server.hostname=127.0.0.1"
+- "-Dcom.sun.management.jmxremote.port=9002"
+- "-Dcom.sun.management.jmxremote.rmi.port=9002"
+
+resources:
+  apex:
+    requests:
+      memory: 1Gi
+      cpu: 100m
+      ephemeral-storage:
+    limits:
+      memory: 3Gi
+      cpu: 1000m
+      ephemeral-storage:
+  keycloak:
+    requests:
+      memory: 1Gi
+      cpu: 100m
+      ephemeral-storage:
+    limits:
+      memory: 3Gi
+      cpu: 1000m
+      ephemeral-storage:
+      
+probe:
+  readiness:
+    tcpSocket:
+      # 12345 for apexEngine.sh and 6969 for apexOnapPf.sh
+      port: 6969
+    initialDelaySeconds: 20
+    periodSeconds: 10
+  liveness:
+    tcpSocket:
+      # 12345 for apexEngine.sh and 6969 for apexOnapPf.sh
+      port: 6969
+    initialDelaySeconds: 20
+    periodSeconds: 10
+
+logging:
+  format:
+    json: false
+    
+labels: {}
+terminationGracePeriodSeconds: 30
+
+podPriority:
+  eric-oss-pf-apex:
+    priorityClassName:

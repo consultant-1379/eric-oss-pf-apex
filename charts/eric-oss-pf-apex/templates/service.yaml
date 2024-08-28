@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "eric-oss-pf-apex-service.name" . }}
+  labels:
+    app: {{ template "eric-oss-pf-apex-service.name" . }}
+  {{- include "eric-oss-pf-apex.kubernetes-io-info" .| nindent 4 }}
+  annotations:
+  {{- include "eric-oss-pf-apex.eric-product-info" .| nindent 4 }}
+spec:
+  ports:
+  - name: http
+    port: {{ .Values.service.port.http }}
+    targetPort: {{ .Values.port.http }}
+  - name: https
+    port: {{ .Values.service.port.https }}
+    targetPort: {{ .Values.port.https }}
+  selector:
+    app: {{ template "eric-oss-pf-apex.name" . }}
